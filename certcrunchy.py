@@ -19,8 +19,9 @@ import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 from time import sleep
 from tempfile import mkstemp
-
-
+from concurrent.futures import ThreadPoolExecutor
+import concurrent
+import datetime
 
 _banner = """\033[1;33;49m
  _____           _   _____                       _
@@ -313,20 +314,35 @@ def getIPVTNames(ip_range):
     results.sort()
     return results
 
-
-def getIPReverseLookup(ip_range):
-    results = []
+def getIPReverseLookup(ip_range,num_threads=100):
+    results = set()
     print("[PTR names] Checking [{ip_range}]".format(ip_range=ip_range))
-    for ip in ipaddress.ip_network(ip_range):
-        try:
-            (name, l_arpa, l_ip, )=socket.gethostbyaddr(str(ip))
-            results.append(name.strip().lower())
-        except socket.herror:
-            pass
+    with ThreadPoolExecutor(max_workers=num_threads) as executor:
+        future_to_ip = {executor.submit(socket.gethostbyaddr, str(ip)): ip for ip in ipaddress.ip_network(ip_range)}
+        for future in concurrent.futures.as_completed(future_to_ip):
+            ip = future_to_ip[future]
+            try:
+                (name, l_arpa, l_ip) = future.result()
+                results.add(name.strip().lower())
+            except socket.herror:
+                pass
 
-    results = list(set(results))
-    results.sort()
-    return results
+    return sorted(list(results))
+
+
+# def getIPReverseLookup(ip_range):
+#     results = []
+#     print("[PTR names] Checking [{ip_range}]".format(ip_range=ip_range))
+#     for ip in ipaddress.ip_network(ip_range):
+#         try:
+#             (name, l_arpa, l_ip, )=socket.gethostbyaddr(str(ip))
+#             results.append(name.strip().lower())
+#         except socket.herror:
+#             pass
+
+#     results = list(set(results))
+#     results.sort()
+#     return results
 
 
 def getCertDBNames(domain):
@@ -383,6 +399,8 @@ def getCertSpotterNames(domain):
 
 if __name__ == "__main__":
     print(_banner)
+    print("Program Started!!! " + datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+
     parser = argparse.ArgumentParser()
     parser.add_argument('-d', '--domain', type=str, help="Domain to check")
     parser.add_argument('-D', '--domains', type=str, help="File containing the domains to check")
@@ -454,7 +472,7 @@ if __name__ == "__main__":
 
     if args.iprange:
         _potential_hosts = getNamesFromIps(args.iprange)
-        _potential_hosts = _potential_hosts + getIPReverseLookup(args.iprange)
+        _potential_hosts = _potential_hosts + getIPReverseLookup(args.iprange,_threads)
         if api_keys._virustotal and args.virustotal:
             _potential_hosts = getIPVTNames(args.iprange)
 
@@ -496,3 +514,5 @@ if __name__ == "__main__":
     for _host in _resolving_hosts:
         print("[Resolving] {host} => [{ips}]".format(host=_host, ips=", ".join(_resolving_hosts[_host])))
     print("")
+    print("Pool completed execution!!! " + datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+
