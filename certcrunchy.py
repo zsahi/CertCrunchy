@@ -471,10 +471,16 @@ if __name__ == "__main__":
         sleep(_delay)
 
     if args.iprange:
-        _potential_hosts = getNamesFromIps(args.iprange)
-        _potential_hosts = _potential_hosts + getIPReverseLookup(args.iprange,_threads)
-        if api_keys._virustotal and args.virustotal:
-            _potential_hosts = getIPVTNames(args.iprange)
+        _potential_hosts_final = []
+        ipranges = args.iprange.split(",")
+        for iprange in ipranges:
+            _potential_hosts = getNamesFromIps(iprange)
+            _potential_hosts = _potential_hosts + getIPReverseLookup(iprange,_threads)
+            if api_keys._virustotal and args.virustotal:
+                _potential_hosts = getIPVTNames(args.iprange)
+            _potential_hosts_final.extend(_potential_hosts)
+        _potential_hosts = _potential_hosts_final
+
 
     print("Checking potential hostnames for DNS A records")
 
